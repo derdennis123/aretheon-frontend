@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OPS
+  REVIEWER
+  BUYER
+}
+
+enum CameraPosition {
+  HEAD
+  CHEST
+}
+
+enum UploadStatus {
+  PENDING
+  UPLOADING
+  UPLOADED
+  FAILED
+}
+
+enum PipelineStatus {
+  PENDING
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum ReviewStatus {
+  APPROVED
+  FIXED
+  REJECTED
+  FLAGGED
+}
+
+enum JobStatus {
+  STARTING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TERMINATED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(OPS)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  uploadedSessions Session[] @relation("uploadedBy")
+  reviews          Review[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workers       Worker[]
+  pipelineJobs  PipelineJob[]
+}
+
+model Worker {
+  id             String         @id @default(cuid())
+  projectId      String
+  workerCode     String
+  cameraPosition CameraPosition @default(HEAD)
+  createdAt      DateTime       @default(now())
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sessions Session[]
+
+  @@unique([projectId, workerCode])
+}
+
+model Session {
+  id              String       @id @default(cuid())
+  workerId        String
+  date            DateTime
+  sessionNumber   Int          @default(1)
+  rawVideoS3Key   String       @unique
+  durationSeconds Int?
+  fileSizeBytes   BigInt?
+  uploadStatus    UploadStatus @default(PENDING)
+  uploadedAt      DateTime?
+  uploadedById    String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  worker     Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  uploadedBy User?  @relation("uploadedBy", fields: [uploadedById], references: [id])
+  clips      Clip[]
+}
+
+model Clip {
+  id              String         @id @default(cuid())
+  sessionId       String
+  clipNumber      Int
+  s3Prefix        String
+  durationSeconds Float?
+  pipelineStatus  PipelineStatus @default(PENDING)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  session     Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  annotation  Annotation?
+  reviews     Review[]
+
+  @@unique([sessionId, clipNumber])
+}
+
+model Annotation {
+  id                String   @id @default(cuid())
+  clipId            String   @unique
+  videoS3Key        String?
+  metadataS3Key     String?
+  depthS3Key        String?
+  poseS3Key         String?
+  segS3Key          String?
+  cameraPoseS3Key   String?
+  actionsS3Key      String?
+  qualityJson       Json?
+  gemmaOutputJson   Json?
+  ego4dVerb         String?
+  ego4dNoun         String?
+  descriptionDe     String?
+  descriptionEn     String?
+  confidenceScore   Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  clip Clip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id              String       @id @default(cuid())
+  clipId          String
+  reviewerId      String
+  status          ReviewStatus
+  rejectReason    String?
+  correctionsJson Json?
+  reviewedAt      DateTime     @default(now())
+
+  clip     Clip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  reviewer User @relation(fields: [reviewerId], references: [id])
+}
+
+model PipelineJob {
+  id           String    @id @default(cuid())
+  projectId    String?
+  podId        String?
+  gpuType      String?
+  costPerHour  Float?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  status       JobStatus @default(STARTING)
+  totalCost    Float?
+  logTailS3Key String?
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id])
+}
+
+model Dataset {
+  id          String   @id @default(cuid())
+  name        String
+  version     String
+  projectIds  String[]
+  clipCount   Int      @default(0)
+  totalHours  Float    @default(0)
+  hfRepo      String?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
