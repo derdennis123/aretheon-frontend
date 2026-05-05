@@ -10,8 +10,12 @@ type ClipAnnotation = {
   descriptionDe: string | null;
   descriptionEn: string | null;
   confidenceScore: number | null;
+  videoS3Key: string | null;
+  metadataS3Key: string | null;
   depthS3Key: string | null;
   poseS3Key: string | null;
+  segS3Key: string | null;
+  cameraPoseS3Key: string | null;
   actionsS3Key: string | null;
 };
 
@@ -83,6 +87,10 @@ export function SessionViewer({
             currentTime={time.current}
             onSeek={(t) => playerRef.current?.seek(t)}
           />
+        )}
+
+        {activeClip?.annotation && (
+          <ClipFilesPanel clipId={activeClip.id} a={activeClip.annotation} />
         )}
       </div>
 
@@ -196,6 +204,65 @@ function OverlayToggles({
               <span className="ml-auto text-xs text-fg-subtle">n/a</span>
             )}
           </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ClipFilesPanel({ clipId, a }: { clipId: string; a: ClipAnnotation }) {
+  const files: { label: string; key: string | null }[] = [
+    { label: "Video (MP4)", key: a.videoS3Key },
+    { label: "Metadata (JSON)", key: a.metadataS3Key },
+    { label: "Hand Pose (JSON)", key: a.poseS3Key },
+    { label: "Action Labels (JSON)", key: a.actionsS3Key },
+    { label: "Depth", key: a.depthS3Key },
+    { label: "Segmentation", key: a.segS3Key },
+    { label: "Camera Pose (JSON)", key: a.cameraPoseS3Key },
+  ];
+  const present = files.filter((f) => f.key);
+
+  async function downloadFile(key: string) {
+    const r = await fetch("/api/s3/presign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, expires: 1800 }),
+    });
+    if (!r.ok) return;
+    const { url } = (await r.json()) as { url: string };
+    window.open(url, "_blank", "noopener");
+  }
+
+  return (
+    <div className="card-pad">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          Dateien ({present.length}/7)
+        </div>
+        <a
+          href={`/api/clips/${clipId}/export?video=1`}
+          download
+          className="btn btn-secondary px-2 py-1 text-xs"
+        >
+          Bundle ZIP
+        </a>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5 text-xs">
+        {files.map((f) => (
+          <button
+            key={f.label}
+            type="button"
+            disabled={!f.key}
+            onClick={() => f.key && downloadFile(f.key)}
+            className={`flex items-center justify-between rounded border px-2 py-1.5 text-left transition-colors ${
+              f.key
+                ? "border-border bg-bg-subtle hover:bg-bg-hover"
+                : "border-border-subtle bg-bg-subtle opacity-50"
+            }`}
+          >
+            <span>{f.label}</span>
+            <span className="text-fg-subtle">{f.key ? "↓" : "—"}</span>
+          </button>
         ))}
       </div>
     </div>

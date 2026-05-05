@@ -9,7 +9,16 @@
 - [x] **Schritt 5** *(teilweise)* — Hand-Pose live, Sub-Task Timeline live, Action Labels live; Depth/Seg warten auf JSON-Manifest
 - [x] **Schritt 6** — Annotation Review UI (Queue, Editing, Approve/Fix/Reject/Flag, Batch-Approve)
 - [x] **Schritt 7** *(MVP)* — Buyer-Layout, Approved-Clips-Browser, Request-Dataset-Button (DB-Record)
-- [ ] Schritt 8 — Polish: Suche, Volltext-Filter, Export-Buttons, Dataset-Cards, Email-Delivery für Buyer-Requests
+- [x] **Schritt 8** — Volltext-Suche mit Filtern, Per-Clip Bundle ZIP, Dataset-Card Markdown,
+       Admin-Anfragen-Ansicht, Cron-Endpunkt für Pipeline-Sync, Dashboard-Polish
+
+## Open follow-ups
+
+- Email-Delivery für `DatasetRequest` (SES / Resend)
+- Browser-side NPZ decoder oder Pipeline-Side PNG-Manifest für Depth/Seg-Overlays
+- WebDataset TAR-Shard Export pro Dataset (statt nur Per-Clip ZIPs)
+- HF Hub Push aus dem `Dataset` Modell heraus
+- `prisma migrate deploy` statt `prisma db push` nach Schema-Stabilität
 
 ## Architecture
 
@@ -128,6 +137,57 @@ tolerated.
 - **Batch Approve** via the queue checkboxes — useful for clearing a
   high-confidence backlog quickly.
 - After saving, the next pending clip is auto-selected.
+
+## Search & Filter
+
+`/studio/search` is a debounced search page that hits `GET /api/clips/search`
+with query, project, confidence, review-status and date-range filters. The
+backend uses Postgres `ILIKE` (`mode: insensitive`) over Ego4D verb/noun and
+both German + English descriptions. Results are clickable through to the
+matching session.
+
+The sidebar's "Studio" and "Suche" entries share the `/studio` prefix; the
+sidebar's active-state logic was tightened to prefer the longer match so
+"Suche" stays active while you're typing.
+
+## Export
+
+- **Per-clip bundle ZIP**: `GET /api/clips/:id/export?video=1`. Server-side
+  STORE-only ZIP (`src/lib/zip.ts`) of the small JSON sidecars
+  (`metadata`, `pose`, `actions`, `camera_pose`). Large binaries (MP4, depth
+  NPZ, segmentation NPZ) are not bundled in the archive — they ship as
+  presigned URLs in a `_downloads.json` manifest inside the ZIP, valid for
+  one hour. This keeps response sizes bounded while still giving the user
+  one-click access to everything.
+- **Per-clip individual files**: each annotation key is a download button on
+  the session page that resolves a 30 min presigned GET on click.
+- **Dataset card**: `GET /api/projects/:slug/dataset-card` returns a Markdown
+  download with project stats, action distribution table, annotation-layer
+  description, and a license/contact footer. Downloadable from the project
+  page.
+
+## Admin
+
+`/admin/requests` lists `DatasetRequest` rows with the buyer's name + email
+and approve/decline buttons. Approve / Decline simply flips the status; an
+email follow-up to the buyer is left for the integrator to wire (mailto:
+links from the email column give a quick out for now).
+
+## Cron
+
+`POST /api/cron/pipeline-sync` is the autonomous version of the
+`/pipeline/jobs/:id/sync` endpoint:
+
+```
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  https://<host>/api/cron/pipeline-sync
+```
+
+It scans every job whose status is `STARTING` or `RUNNING`, pulls pod state,
+reads `status.txt`, and ingests outputs on `all_done`. Wire it up to a
+Railway scheduler (every 1–2 min) so jobs progress without anyone having
+the UI open. If `CRON_SECRET` is unset the endpoint is open — only do that
+if the host is firewalled.
 
 ## Buyer area
 
@@ -250,6 +310,11 @@ src/
       reviews/queue           ── Review queue (pending/approved/all)
       reviews                 ── POST single review, PATCH batch approve
       dataset-requests        ── Buyer "request full dataset"
+      clips/search            ── Full-text + filtered clip search
+      clips/[id]/export       ── Per-clip metadata-bundle ZIP
+      projects/[slug]/dataset-card ── Markdown dataset card download
+      admin/requests          ── List + PATCH dataset requests
+      cron/pipeline-sync      ── Secret-gated job sweeper
     (app)/
       layout.tsx              ── Auth-guarded shell with sidebar
       dashboard/              ── Overview tiles
@@ -257,6 +322,8 @@ src/
       studio/                 ── Project browser + session detail
       pipeline/               ── Pipeline jobs + start panel
       review/                 ── Review queue + editor
+      admin/requests/         ── Dataset request management
+      studio/search/          ── Full-text + filtered clip search
     buyer/
       layout.tsx              ── Buyer shell (no sidebar)
       page.tsx                ── Approved-clips browser
@@ -277,6 +344,7 @@ src/
     runpod-api.ts            ── RunPod REST API client + cost estimate
     multipart-upload.ts      ── Browser-side MPU runner
     pipeline-ingest.ts       ── Walk job outputs → Clip+Annotation rows
+    zip.ts                   ── Minimal STORE-only ZIP writer
     utils.ts                 ── cn / formatBytes / formatDate / formatDuration
   middleware.ts              ── Route-level auth + role gating
 Dockerfile, railway.json, .dockerignore — Railway deployment config

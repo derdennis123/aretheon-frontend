@@ -32,6 +32,9 @@ export default withAuth(
     ) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
+    if (path.startsWith("/admin") && role !== "ADMIN") {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
     return NextResponse.next();
   },
   {
@@ -50,11 +53,13 @@ export const config = {
     "/buyer/:path*",
     "/pipeline/:path*",
     "/review/:path*",
+    "/admin/:path*",
     "/api/projects/:path*",
     "/api/workers/:path*",
     "/api/sessions/:path*",
     "/api/upload/:path*",
     "/api/clips/:path*",
+    "/api/admin/:path*",
     "/api/s3/:path*",
     "/api/pipeline/:path*",
     "/api/reviews/:path*",

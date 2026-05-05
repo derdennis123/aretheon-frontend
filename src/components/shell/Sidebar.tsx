@@ -12,8 +12,10 @@ const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/upload", label: "Upload" },
   { href: "/studio", label: "Data Studio" },
+  { href: "/studio/search", label: "Suche" },
   { href: "/review", label: "Review", roles: ["ADMIN", "REVIEWER"] },
   { href: "/pipeline", label: "Pipeline", roles: ["ADMIN", "OPS"] },
+  { href: "/admin/requests", label: "Anfragen", roles: ["ADMIN"] },
 ];
 
 export function Sidebar({
@@ -35,8 +37,17 @@ export function Sidebar({
 
       <nav className="flex-1 space-y-0.5 px-2 py-2">
         {items.map((item) => {
+          const matchesAnotherItem = items.some(
+            (other) =>
+              other !== item &&
+              other.href.length > item.href.length &&
+              other.href.startsWith(`${item.href}/`) &&
+              (pathname === other.href ||
+                pathname.startsWith(`${other.href}/`)),
+          );
           const active =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
+            !matchesAnotherItem &&
+            (pathname === item.href || pathname.startsWith(`${item.href}/`));
           return (
             <Link
               key={item.href}

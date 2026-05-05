@@ -42,7 +42,16 @@ export default async function ProjectPage({
             <p className="text-sm text-fg-muted">{project.location}</p>
           )}
         </div>
-        <StartProcessingButton projectId={project.id} />
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/projects/${project.slug}/dataset-card`}
+            download
+            className="btn btn-secondary"
+          >
+            Dataset Card
+          </a>
+          <StartProcessingButton projectId={project.id} />
+        </div>
       </header>
 
       <div className="space-y-6">

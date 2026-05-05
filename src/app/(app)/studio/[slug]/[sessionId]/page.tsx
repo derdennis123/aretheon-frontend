@@ -52,8 +52,12 @@ export default async function SessionPage({
           descriptionDe: c.annotation.descriptionDe,
           descriptionEn: c.annotation.descriptionEn,
           confidenceScore: c.annotation.confidenceScore,
+          videoS3Key: c.annotation.videoS3Key,
+          metadataS3Key: c.annotation.metadataS3Key,
           depthS3Key: c.annotation.depthS3Key,
           poseS3Key: c.annotation.poseS3Key,
+          segS3Key: c.annotation.segS3Key,
+          cameraPoseS3Key: c.annotation.cameraPoseS3Key,
           actionsS3Key: c.annotation.actionsS3Key,
         }
       : null,
