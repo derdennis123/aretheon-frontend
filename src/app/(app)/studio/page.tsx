@@ -1,10 +1,17 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
+import { NewProjectButton } from "@/components/projects/NewProjectButton";
 
 export const dynamic = "force-dynamic";
 
 export default async function StudioIndex() {
+  const session = await getServerSession(authOptions);
+  const canCreate =
+    session?.user.role === "ADMIN" || session?.user.role === "OPS";
+
   const projects = await prisma.project.findMany({
     orderBy: { name: "asc" },
     include: {
@@ -24,11 +31,14 @@ export default async function StudioIndex() {
 
   return (
     <div className="mx-auto max-w-6xl px-8 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Data Studio</h1>
-        <p className="text-sm text-fg-muted">
-          Projekte, Workers und Sessions durchsuchen.
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Data Studio</h1>
+          <p className="text-sm text-fg-muted">
+            Projekte, Workers und Sessions durchsuchen.
+          </p>
+        </div>
+        {canCreate && <NewProjectButton />}
       </header>
 
       <div className="grid gap-4 md:grid-cols-2">
