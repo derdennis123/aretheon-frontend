@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession, jsonError } from "@/lib/api";
-import { getObjectText, presignGet } from "@/lib/runpod-s3";
+import { getObjectText } from "@/lib/runpod-s3";
+import { s3StreamUrl } from "@/lib/utils";
 import { buildZip } from "@/lib/zip";
 
 export async function GET(
@@ -74,11 +75,13 @@ export async function GET(
     });
 
   const bigFiles: Record<string, string> = {};
-  if (a.videoS3Key && includeVideo) {
-    bigFiles[`${clipName}.mp4`] = await presignGet(a.videoS3Key, 3600);
-  }
-  if (a.depthS3Key) bigFiles[`${clipName}.depth`] = await presignGet(a.depthS3Key, 3600);
-  if (a.segS3Key) bigFiles[`${clipName}.segmentation`] = await presignGet(a.segS3Key, 3600);
+  const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+  if (a.videoS3Key && includeVideo)
+    bigFiles[`${clipName}.mp4`] = origin + s3StreamUrl(a.videoS3Key);
+  if (a.depthS3Key)
+    bigFiles[`${clipName}.depth`] = origin + s3StreamUrl(a.depthS3Key);
+  if (a.segS3Key)
+    bigFiles[`${clipName}.segmentation`] = origin + s3StreamUrl(a.segS3Key);
   if (Object.keys(bigFiles).length > 0) {
     entries.push({
       name: `${folder}/_downloads.json`,
@@ -86,7 +89,7 @@ export async function GET(
         JSON.stringify(
           {
             note:
-              "Large binary files (video / depth NPZ / segmentation NPZ) are not bundled into this ZIP. Fetch them via the presigned URLs below within 1 hour.",
+              "Large binary files (video / depth NPZ / segmentation NPZ) are not bundled into this ZIP. Fetch them via the URLs below while authenticated to the Aretheon platform.",
             urls: bigFiles,
           },
           null,

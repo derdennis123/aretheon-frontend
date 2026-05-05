@@ -222,14 +222,8 @@ function ClipFilesPanel({ clipId, a }: { clipId: string; a: ClipAnnotation }) {
   ];
   const present = files.filter((f) => f.key);
 
-  async function downloadFile(key: string) {
-    const r = await fetch("/api/s3/presign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, expires: 1800 }),
-    });
-    if (!r.ok) return;
-    const { url } = (await r.json()) as { url: string };
+  function downloadFile(key: string) {
+    const url = "/api/s3/stream/" + key.split("/").map(encodeURIComponent).join("/");
     window.open(url, "_blank", "noopener");
   }
 

@@ -23,6 +23,10 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+export function s3StreamUrl(key: string): string {
+  return "/api/s3/stream/" + key.split("/").map(encodeURIComponent).join("/");
+}
+
 export function formatDate(d: Date | string): string {
   const date = typeof d === "string" ? new Date(d) : d;
   return date.toLocaleDateString("de-DE", {

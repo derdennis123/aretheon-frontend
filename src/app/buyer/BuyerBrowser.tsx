@@ -39,23 +39,12 @@ export function BuyerBrowser({ projects }: { projects: Project[] }) {
   const clip = project?.clips.find((c) => c.id === activeClipId) ?? null;
 
   useEffect(() => {
-    let cancelled = false;
     if (!clip?.videoS3Key) {
       setVideoUrl(null);
       return;
     }
-    fetch("/api/s3/presign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: clip.videoS3Key, expires: 1800 }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { url: string } | null) => {
-        if (!cancelled && d) setVideoUrl(d.url);
-      });
-    return () => {
-      cancelled = true;
-    };
+    const k = clip.videoS3Key;
+    setVideoUrl("/api/s3/stream/" + k.split("/").map(encodeURIComponent).join("/"));
   }, [clip?.id, clip?.videoS3Key]);
 
   async function requestDataset() {

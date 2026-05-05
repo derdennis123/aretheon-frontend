@@ -83,24 +83,12 @@ export function ReviewQueue() {
   }, [filter]);
 
   useEffect(() => {
-    let cancelled = false;
     if (!active?.annotation?.videoS3Key) {
       setVideoUrl(null);
       return;
     }
     const key = active.annotation.videoS3Key;
-    fetch("/api/s3/presign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, expires: 1800 }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { url: string } | null) => {
-        if (!cancelled && d) setVideoUrl(d.url);
-      });
-    return () => {
-      cancelled = true;
-    };
+    setVideoUrl("/api/s3/stream/" + key.split("/").map(encodeURIComponent).join("/"));
   }, [active?.id, active?.annotation?.videoS3Key]);
 
   useEffect(() => {

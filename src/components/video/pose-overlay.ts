@@ -15,13 +15,7 @@ const HAND_BONES: [number, number][] = [
 ];
 
 async function presignAndFetch(key: string): Promise<Response> {
-  const presign = await fetch("/api/s3/presign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key, expires: 600 }),
-  });
-  if (!presign.ok) throw new Error("Presign failed");
-  const { url } = (await presign.json()) as { url: string };
+  const url = "/api/s3/stream/" + key.split("/").map(encodeURIComponent).join("/");
   return fetch(url);
 }
 

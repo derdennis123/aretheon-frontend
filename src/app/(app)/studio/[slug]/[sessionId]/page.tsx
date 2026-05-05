@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { presignGet } from "@/lib/runpod-s3";
-import { formatBytes, formatDate } from "@/lib/utils";
+import { formatBytes, formatDate, s3StreamUrl } from "@/lib/utils";
 import { SessionViewer } from "./SessionViewer";
 import { StartProcessingButton } from "@/components/pipeline/StartProcessingButton";
 
@@ -30,14 +29,10 @@ export default async function SessionPage({
   });
   if (!sessionRow) notFound();
 
-  let videoUrl: string | null = null;
-  if (sessionRow.uploadStatus === "UPLOADED") {
-    try {
-      videoUrl = await presignGet(sessionRow.rawVideoS3Key, 3600);
-    } catch {
-      videoUrl = null;
-    }
-  }
+  const videoUrl =
+    sessionRow.uploadStatus === "UPLOADED"
+      ? s3StreamUrl(sessionRow.rawVideoS3Key)
+      : null;
 
   const clips = sessionRow.clips.map((c) => ({
     id: c.id,

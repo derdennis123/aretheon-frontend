@@ -44,13 +44,9 @@ export function SubTaskTimeline({
     setLoaded(false);
     (async () => {
       try {
-        const presign = await fetch("/api/s3/presign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: actionsKey, expires: 600 }),
-        });
-        if (!presign.ok) throw new Error();
-        const { url } = (await presign.json()) as { url: string };
+        const url =
+          "/api/s3/stream/" +
+          actionsKey.split("/").map(encodeURIComponent).join("/");
         const r = await fetch(url);
         if (!r.ok) throw new Error();
         const data = (await r.json()) as { sub_tasks?: SubTask[] };

@@ -18,13 +18,7 @@ export type DepthSequence = {
 };
 
 async function presignAndFetch(key: string): Promise<Response> {
-  const res = await fetch("/api/s3/presign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key, expires: 600 }),
-  });
-  if (!res.ok) throw new Error("Presign failed");
-  const { url } = (await res.json()) as { url: string };
+  const url = "/api/s3/stream/" + key.split("/").map(encodeURIComponent).join("/");
   return fetch(url);
 }
 
