@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { VideoCanvas } from "@/components/video/VideoCanvas";
+import { useRef, useState } from "react";
+import { VideoCanvas, type VideoCanvasHandle } from "@/components/video/VideoCanvas";
+import { SubTaskTimeline } from "@/components/video/SubTaskTimeline";
 
 type ClipAnnotation = {
   ego4dVerb: string | null;
@@ -39,6 +40,8 @@ export function SessionViewer({
     seg: false,
     actions: true,
   });
+  const [time, setTime] = useState({ current: 0, duration: 0 });
+  const playerRef = useRef<VideoCanvasHandle>(null);
 
   const activeClip = clips.find((c) => c.id === activeClipId) ?? null;
 
@@ -47,7 +50,15 @@ export function SessionViewer({
       <div className="space-y-3">
         <div className="card overflow-hidden">
           {videoUrl ? (
-            <VideoCanvas src={videoUrl} overlays={overlays} clip={activeClip} />
+            <VideoCanvas
+              ref={playerRef}
+              src={videoUrl}
+              overlays={overlays}
+              clip={activeClip}
+              onTimeUpdate={(current, duration) =>
+                setTime({ current, duration })
+              }
+            />
           ) : (
             <div className="flex aspect-video items-center justify-center bg-bg-subtle text-sm text-fg-muted">
               Upload nicht abgeschlossen — Video noch nicht abspielbar.
@@ -63,6 +74,15 @@ export function SessionViewer({
 
         {activeClip?.annotation && overlays.actions && (
           <ActionLabelCard a={activeClip.annotation} />
+        )}
+
+        {activeClip?.annotation?.actionsS3Key && (
+          <SubTaskTimeline
+            actionsKey={activeClip.annotation.actionsS3Key}
+            duration={time.duration || activeClip.durationSeconds || 0}
+            currentTime={time.current}
+            onSeek={(t) => playerRef.current?.seek(t)}
+          />
         )}
       </div>
 

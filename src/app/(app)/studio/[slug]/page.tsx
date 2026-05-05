@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatBytes, formatDate } from "@/lib/utils";
+import { StartProcessingButton } from "@/components/pipeline/StartProcessingButton";
 
 export const dynamic = "force-dynamic";
 
@@ -27,16 +28,21 @@ export default async function ProjectPage({
 
   return (
     <div className="mx-auto max-w-6xl px-8 py-10">
-      <header className="mb-8">
-        <div className="mb-1 text-xs text-fg-muted">
-          <Link href="/studio" className="hover:text-fg">
-            Studio
-          </Link>
+      <header className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <div className="mb-1 text-xs text-fg-muted">
+            <Link href="/studio" className="hover:text-fg">
+              Studio
+            </Link>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {project.name}
+          </h1>
+          {project.location && (
+            <p className="text-sm text-fg-muted">{project.location}</p>
+          )}
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-        {project.location && (
-          <p className="text-sm text-fg-muted">{project.location}</p>
-        )}
+        <StartProcessingButton projectId={project.id} />
       </header>
 
       <div className="space-y-6">

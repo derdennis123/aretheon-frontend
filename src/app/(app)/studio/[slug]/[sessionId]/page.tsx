@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { presignGet } from "@/lib/runpod-s3";
 import { formatBytes, formatDate } from "@/lib/utils";
 import { SessionViewer } from "./SessionViewer";
+import { StartProcessingButton } from "@/components/pipeline/StartProcessingButton";
 
 export const dynamic = "force-dynamic";
 
@@ -60,26 +61,32 @@ export default async function SessionPage({
 
   return (
     <div className="mx-auto max-w-6xl px-8 py-10">
-      <header className="mb-6">
-        <div className="mb-1 space-x-2 text-xs text-fg-muted">
-          <Link href="/studio" className="hover:text-fg">
-            Studio
-          </Link>
-          <span>/</span>
-          <Link href={`/studio/${project.slug}`} className="hover:text-fg">
-            {project.name}
-          </Link>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <div className="mb-1 space-x-2 text-xs text-fg-muted">
+            <Link href="/studio" className="hover:text-fg">
+              Studio
+            </Link>
+            <span>/</span>
+            <Link href={`/studio/${project.slug}`} className="hover:text-fg">
+              {project.name}
+            </Link>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {sessionRow.worker.workerCode} · {formatDate(sessionRow.date)} · session
+            {String(sessionRow.sessionNumber).padStart(2, "0")}
+          </h1>
+          <div className="mt-1 flex gap-3 text-xs text-fg-muted">
+            <span>{sessionRow.uploadStatus.toLowerCase()}</span>
+            {sessionRow.fileSizeBytes && (
+              <span>{formatBytes(sessionRow.fileSizeBytes)}</span>
+            )}
+            <span>{sessionRow.clips.length} Clip{sessionRow.clips.length === 1 ? "" : "s"}</span>
+          </div>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {sessionRow.worker.workerCode} · {formatDate(sessionRow.date)} · session
-          {String(sessionRow.sessionNumber).padStart(2, "0")}
-        </h1>
-        <div className="mt-1 flex gap-3 text-xs text-fg-muted">
-          <span>{sessionRow.uploadStatus.toLowerCase()}</span>
-          {sessionRow.fileSizeBytes && (
-            <span>{formatBytes(sessionRow.fileSizeBytes)}</span>
-          )}
-        </div>
+        {sessionRow.uploadStatus === "UPLOADED" && (
+          <StartProcessingButton sessionId={sessionRow.id} />
+        )}
       </header>
 
       <SessionViewer videoUrl={videoUrl} clips={clips} />

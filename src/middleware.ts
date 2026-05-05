@@ -10,10 +10,27 @@ export default withAuth(
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
     if (
-      (path.startsWith("/upload") || path.startsWith("/studio")) &&
+      (path.startsWith("/upload") ||
+        path.startsWith("/studio") ||
+        path.startsWith("/pipeline") ||
+        path.startsWith("/review")) &&
       role === "BUYER"
     ) {
       return NextResponse.redirect(new URL("/buyer", req.url));
+    }
+    if (
+      path.startsWith("/pipeline") &&
+      role !== "ADMIN" &&
+      role !== "OPS"
+    ) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+    if (
+      path.startsWith("/review") &&
+      role !== "ADMIN" &&
+      role !== "REVIEWER"
+    ) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
     }
     return NextResponse.next();
   },
@@ -31,11 +48,16 @@ export const config = {
     "/upload/:path*",
     "/studio/:path*",
     "/buyer/:path*",
+    "/pipeline/:path*",
+    "/review/:path*",
     "/api/projects/:path*",
     "/api/workers/:path*",
     "/api/sessions/:path*",
     "/api/upload/:path*",
     "/api/clips/:path*",
     "/api/s3/:path*",
+    "/api/pipeline/:path*",
+    "/api/reviews/:path*",
+    "/api/dataset-requests/:path*",
   ],
 };

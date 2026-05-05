@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { loadPoseFrames, drawPose, type PoseFrame } from "./pose-overlay";
 import { loadDepthSequence, drawDepth, type DepthSequence } from "./depth-overlay";
 
@@ -12,15 +12,20 @@ type ClipLike = {
   } | null;
 };
 
-export function VideoCanvas({
-  src,
-  overlays,
-  clip,
-}: {
-  src: string;
-  overlays: { depth: boolean; pose: boolean; seg: boolean };
-  clip: ClipLike | null;
-}) {
+export type VideoCanvasHandle = {
+  seek: (t: number) => void;
+  getVideo: () => HTMLVideoElement | null;
+};
+
+export const VideoCanvas = forwardRef<
+  VideoCanvasHandle,
+  {
+    src: string;
+    overlays: { depth: boolean; pose: boolean; seg: boolean };
+    clip: ClipLike | null;
+    onTimeUpdate?: (t: number, duration: number) => void;
+  }
+>(function VideoCanvas({ src, overlays, clip, onTimeUpdate }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
@@ -65,6 +70,30 @@ export function VideoCanvas({
       cancelled = true;
     };
   }, [overlays.depth, clip?.annotation?.depthS3Key]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      seek: (t: number) => {
+        if (videoRef.current) videoRef.current.currentTime = t;
+      },
+      getVideo: () => videoRef.current,
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !onTimeUpdate) return;
+    const handler = () =>
+      onTimeUpdate(video.currentTime, video.duration || 0);
+    video.addEventListener("timeupdate", handler);
+    video.addEventListener("loadedmetadata", handler);
+    return () => {
+      video.removeEventListener("timeupdate", handler);
+      video.removeEventListener("loadedmetadata", handler);
+    };
+  }, [onTimeUpdate]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -135,4 +164,4 @@ export function VideoCanvas({
       />
     </div>
   );
-}
+});

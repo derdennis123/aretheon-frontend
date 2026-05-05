@@ -1,20 +1,59 @@
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { BuyerBrowser } from "./BuyerBrowser";
 
-export default async function BuyerLanding() {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+export const dynamic = "force-dynamic";
 
-  return (
-    <div className="mx-auto max-w-3xl px-8 py-16">
-      <h1 className="mb-3 text-2xl font-semibold tracking-tight">
-        Aretheon Datasets
-      </h1>
-      <p className="text-fg-muted">
-        Hallo {session.user.name}. Der Buyer-Bereich wird in einem späteren
-        Schritt freigeschaltet.
-      </p>
-    </div>
-  );
+export default async function BuyerHome() {
+  // Approved clips per project. The buyer cannot see anything that has not
+  // been reviewed and approved by the team.
+  const projects = await prisma.project.findMany({
+    orderBy: { name: "asc" },
+    include: {
+      workers: {
+        include: {
+          sessions: {
+            include: {
+              clips: {
+                where: { reviews: { some: { status: "APPROVED" } } },
+                include: { annotation: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const summaries = projects
+    .map((p) => {
+      const allClips = p.workers.flatMap((w) =>
+        w.sessions.flatMap((s) =>
+          s.clips.map((c) => ({
+            id: c.id,
+            clipNumber: c.clipNumber,
+            durationSeconds: c.durationSeconds,
+            ego4dVerb: c.annotation?.ego4dVerb ?? null,
+            ego4dNoun: c.annotation?.ego4dNoun ?? null,
+            descriptionEn: c.annotation?.descriptionEn ?? null,
+            descriptionDe: c.annotation?.descriptionDe ?? null,
+            videoS3Key: c.annotation?.videoS3Key ?? null,
+          })),
+        ),
+      );
+      return {
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        location: p.location,
+        clipCount: allClips.length,
+        totalSeconds: allClips.reduce(
+          (acc, c) => acc + (c.durationSeconds ?? 0),
+          0,
+        ),
+        clips: allClips.slice(0, 50),
+      };
+    })
+    .filter((p) => p.clipCount > 0);
+
+  return <BuyerBrowser projects={summaries} />;
 }

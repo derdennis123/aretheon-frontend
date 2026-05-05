@@ -2,16 +2,14 @@
 
 ## Status
 
-Steps 1–3 of the briefing are landed in `claude/aretheon-platform-setup-0iiXf`:
-
 - [x] **Schritt 1** — Next.js scaffold, Auth, DB schema, Railway-ready Dockerfile
 - [x] **Schritt 2** — Upload Portal mit S3-Multipart, Projekt/Worker-Verwaltung
 - [x] **Schritt 3** — Data Studio: Projekt-Browser + Video-Player mit Overlay-Toggles
-- [ ] Schritt 4 — RunPod Pod-Start, Pipeline-Status-Polling, Kosten-Tracking
-- [ ] Schritt 5 — Hand-Pose / Segmentation / Action / Sub-Task Overlays voll verkabeln
-- [ ] Schritt 6 — Annotation Review UI (Queue, Editing, Approve/Reject)
-- [ ] Schritt 7 — Buyer-Bereich
-- [ ] Schritt 8 — Polish: Suche, Filter, Export, Dataset-Cards
+- [x] **Schritt 4** — RunPod Pod-Start, Pipeline-Status-Polling, Kosten-Tracking, Output-Ingest
+- [x] **Schritt 5** *(teilweise)* — Hand-Pose live, Sub-Task Timeline live, Action Labels live; Depth/Seg warten auf JSON-Manifest
+- [x] **Schritt 6** — Annotation Review UI (Queue, Editing, Approve/Fix/Reject/Flag, Batch-Approve)
+- [x] **Schritt 7** *(MVP)* — Buyer-Layout, Approved-Clips-Browser, Request-Dataset-Button (DB-Record)
+- [ ] Schritt 8 — Polish: Suche, Volltext-Filter, Export-Buttons, Dataset-Cards, Email-Delivery für Buyer-Requests
 
 ## Architecture
 
@@ -81,18 +79,77 @@ is drawn at the current playback time.
 - **Action Labels** — rendered as a card next to the video, sourced from
   `Annotation.ego4dVerb/Noun/descriptionDe/descriptionEn`.
 
-## Pipeline integration (todo)
+## Pipeline integration
 
-The webapp does not yet start RunPod pods or poll `status.txt`. The DB schema
-already has `PipelineJob` and `Clip.pipelineStatus`, so wiring up:
+Implemented end-to-end against RunPod's REST API
+(`https://rest.runpod.io/v1/`):
 
-1. `POST /api/pipeline/start` → call RunPod GraphQL `podFindAndDeployOnDemand`
-2. Background poller (Vercel Cron / Railway scheduler / `setInterval` in a
-   long-running route handler — TBD on Railway specifics)
-3. On completion: walk `data/outputs/<run_id>/`, parse the WebDataset shards,
-   create `Clip` + `Annotation` rows.
+- `POST /api/pipeline/estimate { projectId | sessionId }` — returns
+  `{ estimatedHours, estimatedUsd, ratePerHour, sessionCount, totalDurationSeconds }`.
+  Heuristic: 2× material duration plus 10 min overhead, on-demand A100 rate.
+- `POST /api/pipeline/start { projectId | sessionId, gpuTypeId? }` — creates a
+  `PipelineJob` row, calls `POST /v1/pods` with the network volume mounted at
+  `/workspace`, env vars (`JOB_ID`, `INPUT_PREFIX`, `OUTPUT_PREFIX`, `HF_TOKEN`,
+  `RUNPOD_VOLUME_ID`), and a Docker start command that extracts
+  `aretheon-src.tar.gz` and runs `aretheon/scripts/pod_oneshot.sh`.
+- `POST /api/pipeline/jobs/:id/sync` — pulls pod status, reads
+  `data/outputs/job_<id>/status.txt`, and on `all_done`:
+    1. terminates the pod,
+    2. walks the output prefix for `clip_XXXXX*` files,
+    3. upserts `Clip` + `Annotation` rows from `clip_XXXXX.json` and
+       `clip_XXXXX.actions.json`,
+    4. computes `totalCost = elapsedHours × costPerHr`.
+- `POST /api/pipeline/jobs/:id/stop?terminate=1` — stop or terminate the pod.
+- `GET /api/pipeline/jobs` — recent jobs for the dashboard.
 
-is the next chunk of work.
+The Pipeline page (`/pipeline`) auto-polls active jobs every 30 s, and a
+"Verarbeiten" button on session/project pages opens a confirm modal with the
+cost estimate before starting.
+
+### Output → DB ingest
+
+`src/lib/pipeline-ingest.ts` walks `data/outputs/job_<id>/` for clip files and
+matches them by basename. The clip `metadata.json` is expected to include
+`source_session_id` so the ingest can route the clip to the right
+`Session.id`. The pipeline is responsible for emitting that field. The 7-file
+contract from the briefing is honoured: depth/pose/seg/camera-pose/actions are
+stored as separate S3 keys on `Annotation`. Missing optional files are
+tolerated.
+
+## Review UI
+
+- **Queue**: `/review`, sorted by Gemma confidence ascending (low confidence
+  first). Three filters: pending / approved / all.
+- **Editor**: edit Ego4D verb/noun, German + English description. Approve
+  applies the corrections back to `Annotation`; Reject takes a reason from a
+  preset dropdown ("Zu dunkel", "Verwackelt", "Keine Handarbeit",
+  "Sensibles Material", "Sonstiges"); Flag marks for sensitive-material
+  removal.
+- **Batch Approve** via the queue checkboxes — useful for clearing a
+  high-confidence backlog quickly.
+- After saving, the next pending clip is auto-selected.
+
+## Buyer area
+
+- `/buyer` (separate layout, no sidebar). Lists projects that have at least
+  one APPROVED clip. Approval is the only gate — the SQL query is a
+  `reviews: { some: { status: "APPROVED" } }` filter.
+- Per-clip preview uses the per-clip MP4 from `Annotation.videoS3Key`,
+  presigned for 30 minutes via `/api/s3/presign`.
+- "Anfrage senden" creates a `DatasetRequest` row (PENDING) so Dennis can
+  process it. Email delivery is not wired (see Schritt 8).
+
+## Sub-Task Timeline
+
+`src/components/video/SubTaskTimeline.tsx` reads `clip_XXXXX.actions.json`
+client-side via a presigned GET, then renders one colored block per sub-task
+(`{ t_start, t_end, label }`) on a thin horizontal bar below the video.
+Clicking a block seeks the player. Hash-based color picking gives stable
+colors per label across clips. No render if `sub_tasks` is missing.
+
+The Studio Session page exposes a `VideoCanvasHandle` ref so the timeline can
+seek the underlying `<video>` element directly without going through React
+state churn.
 
 ## Decisions & gotchas
 
@@ -123,6 +180,21 @@ is the next chunk of work.
   upload status is authoritative without depending on S3 metadata.
 - **Login Suspense** — `useSearchParams()` requires `<Suspense>` in static
   builds; the login page wraps its form accordingly.
+- **Pipeline ingest schema contract** — the offline pipeline must include
+  `source_session_id` in each `clip_XXXXX.json`, otherwise the ingest can't
+  route the clip back to a `Session` row. This is the only schema contract the
+  webapp actually enforces; everything else is best-effort.
+- **`Prisma.JsonNull`** — Prisma 5 distinguishes between "the column is null"
+  and "the JSON value is `null`". For optional JSON columns we use
+  `Prisma.JsonNull` to set the column to NULL, since `null` typed as
+  `InputJsonValue | undefined` doesn't compile.
+- **Pipeline polling** — the `/pipeline` page polls active jobs every 30 s
+  while it is open. There is no background worker yet; if no UI is open the
+  jobs sync only when someone clicks "Sync" (or the next time the page is
+  loaded). For a more autonomous setup, point a Railway cron job at
+  `POST /api/pipeline/jobs/:id/sync`.
+- **Buyer dataset requests** — currently a DB-only flow. A follow-up should
+  wire SES/Resend so the request actually emails Dennis.
 
 ## How to run locally
 
@@ -161,33 +233,51 @@ src/
     login/page.tsx       ── Credentials login form
     buyer/page.tsx       ── Placeholder for the buyer area
     api/
-      auth/[...nextauth] ── NextAuth handler
-      projects/          ── GET list, POST create
-      workers/           ── POST create
-      sessions/          ── GET recent uploads
-      upload/init        ── Start MPU
-      upload/part        ── Presign one part
-      upload/complete    ── Finalise MPU
-      upload/abort       ── Cancel MPU
-      s3/presign         ── Presign GET (prefix-restricted)
+      auth/[...nextauth]      ── NextAuth handler
+      projects/               ── GET list, POST create
+      workers/                ── POST create
+      sessions/               ── GET recent uploads
+      upload/init             ── Start MPU
+      upload/part             ── Presign one part
+      upload/complete         ── Finalise MPU
+      upload/abort            ── Cancel MPU
+      s3/presign              ── Presign GET (prefix-restricted)
+      pipeline/start          ── Create RunPod pod for project/session
+      pipeline/estimate       ── Pre-flight cost estimate
+      pipeline/jobs           ── List recent jobs
+      pipeline/jobs/[id]/sync ── Pull pod status + ingest outputs
+      pipeline/jobs/[id]/stop ── Stop or terminate pod
+      reviews/queue           ── Review queue (pending/approved/all)
+      reviews                 ── POST single review, PATCH batch approve
+      dataset-requests        ── Buyer "request full dataset"
     (app)/
-      layout.tsx         ── Auth-guarded shell with sidebar
-      dashboard/         ── Overview tiles
-      upload/            ── Upload Portal
-      studio/            ── Project browser + session detail
+      layout.tsx              ── Auth-guarded shell with sidebar
+      dashboard/              ── Overview tiles
+      upload/                 ── Upload Portal
+      studio/                 ── Project browser + session detail
+      pipeline/               ── Pipeline jobs + start panel
+      review/                 ── Review queue + editor
+    buyer/
+      layout.tsx              ── Buyer shell (no sidebar)
+      page.tsx                ── Approved-clips browser
   components/
-    shell/Sidebar.tsx    ── Sidebar nav with role filtering
+    shell/Sidebar.tsx              ── Sidebar nav with role filtering
+    pipeline/
+      StartProcessingButton.tsx    ── Cost-confirm modal + start
     video/
-      VideoCanvas.tsx    ── Video element + canvas overlay loop
-      pose-overlay.ts    ── 21-keypoint hand drawing
-      depth-overlay.ts   ── Depth manifest loader (NPZ TODO)
+      VideoCanvas.tsx              ── Video element + canvas overlay loop
+      pose-overlay.ts              ── 21-keypoint hand drawing
+      depth-overlay.ts             ── Depth manifest loader (NPZ TODO)
+      SubTaskTimeline.tsx          ── Clickable sub-task bar
   lib/
-    prisma.ts            ── PrismaClient singleton
-    auth.ts              ── NextAuth config
-    api.ts               ── requireSession / jsonError helpers
-    runpod-s3.ts         ── S3 client + presign + multipart helpers
-    multipart-upload.ts  ── Browser-side MPU runner
-    utils.ts             ── cn / formatBytes / formatDate / formatDuration
-  middleware.ts          ── Route-level auth + role gating
+    prisma.ts                ── PrismaClient singleton
+    auth.ts                  ── NextAuth config
+    api.ts                   ── requireSession / jsonError helpers
+    runpod-s3.ts             ── S3 client + presign + multipart helpers
+    runpod-api.ts            ── RunPod REST API client + cost estimate
+    multipart-upload.ts      ── Browser-side MPU runner
+    pipeline-ingest.ts       ── Walk job outputs → Clip+Annotation rows
+    utils.ts                 ── cn / formatBytes / formatDate / formatDuration
+  middleware.ts              ── Route-level auth + role gating
 Dockerfile, railway.json, .dockerignore — Railway deployment config
 ```
