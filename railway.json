@@ -5,9 +5,9 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "node node_modules/prisma/build/index.js db push --accept-data-loss --schema=prisma/schema.prisma && node server.js",
+    "startCommand": "echo \">> running prisma db push\" && node node_modules/prisma/build/index.js db push --accept-data-loss --schema=prisma/schema.prisma && echo \">> starting next server on $PORT\" && node server.js",
     "healthcheckPath": "/login",
-    "healthcheckTimeout": 60,
+    "healthcheckTimeout": 180,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
   }
