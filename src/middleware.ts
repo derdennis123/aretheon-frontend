@@ -54,6 +54,8 @@ export const config = {
     "/pipeline/:path*",
     "/review/:path*",
     "/admin/:path*",
+    "/settings/:path*",
+    "/api/profile/:path*",
     "/api/projects/:path*",
     "/api/workers/:path*",
     "/api/sessions/:path*",

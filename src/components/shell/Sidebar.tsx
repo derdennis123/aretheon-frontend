@@ -16,6 +16,8 @@ const NAV: NavItem[] = [
   { href: "/review", label: "Review", roles: ["ADMIN", "REVIEWER"] },
   { href: "/pipeline", label: "Pipeline", roles: ["ADMIN", "OPS"] },
   { href: "/admin/requests", label: "Anfragen", roles: ["ADMIN"] },
+  { href: "/admin/users", label: "User", roles: ["ADMIN"] },
+  { href: "/settings", label: "Einstellungen" },
 ];
 
 export function Sidebar({

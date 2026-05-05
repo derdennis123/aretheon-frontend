@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatBytes, formatDate } from "@/lib/utils";
 import { StartProcessingButton } from "@/components/pipeline/StartProcessingButton";
+import { ProjectAdminActions } from "@/components/projects/ProjectAdminActions";
+import { WorkerActions } from "@/components/projects/WorkerActions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +15,11 @@ export default async function ProjectPage({
 }: {
   params: { slug: string };
 }) {
+  const session = await getServerSession(authOptions);
+  const role = session?.user.role;
+  const canEdit = role === "ADMIN" || role === "OPS";
+  const canDelete = role === "ADMIN";
+
   const project = await prisma.project.findUnique({
     where: { slug: params.slug },
     include: {
@@ -50,7 +59,26 @@ export default async function ProjectPage({
           >
             Dataset Card
           </a>
+          <a
+            href={`/api/projects/${project.slug}/export`}
+            download
+            className="btn btn-secondary"
+            title="Alle Clips als WebDataset TAR-Shard exportieren"
+          >
+            Export TAR
+          </a>
           <StartProcessingButton projectId={project.id} />
+          {canEdit && (
+            <ProjectAdminActions
+              project={{
+                slug: project.slug,
+                name: project.name,
+                description: project.description,
+                location: project.location,
+              }}
+              canDelete={canDelete}
+            />
+          )}
         </div>
       </header>
 
@@ -60,9 +88,21 @@ export default async function ProjectPage({
             <div className="flex items-center justify-between border-b border-border bg-bg-subtle px-4 py-2.5 text-sm">
               <div className="flex items-center gap-3">
                 <span className="font-mono">{w.workerCode}</span>
-                <span className="badge border-border bg-bg-elevated text-fg-muted">
-                  {w.cameraPosition.toLowerCase()}
-                </span>
+                {canEdit ? (
+                  <WorkerActions
+                    worker={{
+                      id: w.id,
+                      workerCode: w.workerCode,
+                      cameraPosition: w.cameraPosition,
+                      sessionCount: w.sessions.length,
+                    }}
+                    canDelete={canDelete}
+                  />
+                ) : (
+                  <span className="badge border-border bg-bg-elevated text-fg-muted">
+                    {w.cameraPosition.toLowerCase()}
+                  </span>
+                )}
               </div>
               <span className="text-xs text-fg-muted">
                 {w.sessions.length} session
