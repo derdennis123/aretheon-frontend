@@ -88,7 +88,7 @@ export default async function SessionPage({
         )}
       </header>
 
-      <SessionViewer videoUrl={videoUrl} clips={clips} />
+      <SessionViewer sessionId={sessionRow.id} videoUrl={videoUrl} clips={clips} />
 
       <div className="mt-6 card-pad">
         <h3 className="mb-2 text-sm font-semibold">Storage Path</h3>

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { VideoCanvas, type VideoCanvasHandle } from "@/components/video/VideoCanvas";
 import { SubTaskTimeline } from "@/components/video/SubTaskTimeline";
+import { SessionPipelineStatus } from "@/components/pipeline/SessionPipelineStatus";
 
 type ClipAnnotation = {
   ego4dVerb: string | null;
@@ -29,9 +30,11 @@ type Clip = {
 };
 
 export function SessionViewer({
+  sessionId,
   videoUrl,
   clips,
 }: {
+  sessionId: string;
   videoUrl: string | null;
   clips: Clip[];
 }) {
@@ -70,27 +73,33 @@ export function SessionViewer({
           )}
         </div>
 
-        <OverlayToggles
-          overlays={overlays}
-          setOverlays={setOverlays}
-          activeClip={activeClip}
-        />
+        {clips.length === 0 ? (
+          <SessionPipelineStatus sessionId={sessionId} />
+        ) : (
+          <>
+            <OverlayToggles
+              overlays={overlays}
+              setOverlays={setOverlays}
+              activeClip={activeClip}
+            />
 
-        {activeClip?.annotation && overlays.actions && (
-          <ActionLabelCard a={activeClip.annotation} />
-        )}
+            {activeClip?.annotation && overlays.actions && (
+              <ActionLabelCard a={activeClip.annotation} />
+            )}
 
-        {activeClip?.annotation?.actionsS3Key && (
-          <SubTaskTimeline
-            actionsKey={activeClip.annotation.actionsS3Key}
-            duration={time.duration || activeClip.durationSeconds || 0}
-            currentTime={time.current}
-            onSeek={(t) => playerRef.current?.seek(t)}
-          />
-        )}
+            {activeClip?.annotation?.actionsS3Key && (
+              <SubTaskTimeline
+                actionsKey={activeClip.annotation.actionsS3Key}
+                duration={time.duration || activeClip.durationSeconds || 0}
+                currentTime={time.current}
+                onSeek={(t) => playerRef.current?.seek(t)}
+              />
+            )}
 
-        {activeClip?.annotation && (
-          <ClipFilesPanel clipId={activeClip.id} a={activeClip.annotation} />
+            {activeClip?.annotation && (
+              <ClipFilesPanel clipId={activeClip.id} a={activeClip.annotation} />
+            )}
+          </>
         )}
       </div>
 
@@ -99,9 +108,8 @@ export function SessionViewer({
           Clips ({clips.length})
         </h3>
         {clips.length === 0 ? (
-          <div className="card-pad text-sm text-fg-muted">
-            Noch keine Clips. Diese Session wurde noch nicht durch die Pipeline
-            verarbeitet.
+          <div className="card-pad text-xs text-fg-muted">
+            Werden hier angezeigt sobald die Pipeline durchgelaufen ist.
           </div>
         ) : (
           <div className="space-y-1.5">
