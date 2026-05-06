@@ -31,6 +31,8 @@ export type Pod = {
   name: string;
   desiredStatus: string;
   costPerHr?: number;
+  publicIp?: string;
+  portMappings?: Record<string, number>;
   machine?: {
     gpuTypeId?: string;
     podHostId?: string;
@@ -146,6 +148,13 @@ export function pipelinePodSpec(opts: {
   };
   if (opts.inputFile) env.INPUT_FILE = opts.inputFile;
   if (opts.sourceSessionId) env.SOURCE_SESSION_ID = opts.sourceSessionId;
+  // RunPod's standard convention: any value in PUBLIC_KEY is appended to
+  // /root/.ssh/authorized_keys at boot. Lets us SSH into a stuck pipeline
+  // pod without rebuilding the image. Configured globally on Railway as
+  // DEBUG_SSH_PUBLIC_KEY (one-time setup).
+  if (process.env.DEBUG_SSH_PUBLIC_KEY) {
+    env.PUBLIC_KEY = process.env.DEBUG_SSH_PUBLIC_KEY;
+  }
 
   return {
     name: `aretheon-${opts.jobId}`,

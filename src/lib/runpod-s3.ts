@@ -78,6 +78,32 @@ export async function getObjectText(key: string): Promise<string> {
   return body.transformToString();
 }
 
+// Read the trailing N bytes of an S3 object via a Range GET. Returns null if
+// the object doesn't exist or the read fails. Used by the live log tail in
+// the session pipeline-status endpoint.
+export async function getObjectTail(
+  key: string,
+  bytes: number,
+): Promise<string | null> {
+  const client = getS3Client();
+  try {
+    const res = await client.send(
+      new GetObjectCommand({
+        Bucket: RUNPOD_BUCKET,
+        Key: key,
+        Range: `bytes=-${bytes}`,
+      }),
+    );
+    const body = res.Body as
+      | { transformToString?: () => Promise<string> }
+      | undefined;
+    if (!body?.transformToString) return null;
+    return body.transformToString();
+  } catch {
+    return null;
+  }
+}
+
 export async function getObjectJson<T = unknown>(key: string): Promise<T | null> {
   try {
     const text = await getObjectText(key);

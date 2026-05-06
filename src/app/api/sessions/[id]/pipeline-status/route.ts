@@ -5,8 +5,10 @@ import {
   getPod,
   terminatePod,
   DEFAULT_GPU_RATE_USD,
+  type Pod,
 } from "@/lib/runpod-api";
 import { ingestJobOutputs, readJobStatusFile } from "@/lib/pipeline-ingest";
+import { getObjectTail } from "@/lib/runpod-s3";
 
 // Returns the current pipeline state for a single Session and opportunistically
 // syncs it: pulls pod status from RunPod, reads status.txt, ingests outputs on
@@ -46,12 +48,13 @@ export async function GET(
   }
 
   let podStatus: string | null = null;
+  let podInfo: Pod | null = null;
   let costPerHour = job.costPerHour ?? DEFAULT_GPU_RATE_USD;
   if (job.podId && (job.status === "STARTING" || job.status === "RUNNING")) {
     try {
-      const pod = await getPod(job.podId);
-      podStatus = pod.desiredStatus ?? null;
-      if (pod.costPerHr) costPerHour = pod.costPerHr;
+      podInfo = await getPod(job.podId);
+      podStatus = podInfo.desiredStatus ?? null;
+      if (podInfo.costPerHr) costPerHour = podInfo.costPerHr;
     } catch {
       podStatus = "UNKNOWN";
     }
@@ -116,6 +119,28 @@ export async function GET(
         )
       : null;
 
+  // Tail the live log so the UI can show what the pod is doing without us
+  // having to SSH in. 8 KB is plenty for the last ~50 lines of pipeline
+  // output. We only fetch this for active jobs to keep S3 reads low.
+  const isActive = nextStatus === "STARTING" || nextStatus === "RUNNING";
+  const logTail = isActive
+    ? await getObjectTail(`data/outputs/job_${job.id}/log/oneshot.log`, 8192)
+    : null;
+
+  // Surface the SSH command if the pod has a public IP and a 22 mapping.
+  // The actual key needs to live on the user's machine; the webapp just
+  // injects the public key into the pod via PUBLIC_KEY env var on start.
+  let sshCommand: string | null = null;
+  if (
+    isActive &&
+    podInfo?.publicIp &&
+    podInfo.portMappings &&
+    podInfo.portMappings["22"]
+  ) {
+    sshCommand = `ssh root@${podInfo.publicIp} -p ${podInfo.portMappings["22"]}`;
+  }
+  const sshKeyConfigured = !!process.env.DEBUG_SSH_PUBLIC_KEY;
+
   return NextResponse.json({
     job: {
       id: job.id,
@@ -128,6 +153,9 @@ export async function GET(
       costPerHour,
       totalCost: job.totalCost,
       errorMessage: job.errorMessage,
+      logTail,
+      sshCommand,
+      sshKeyConfigured,
     },
     ingested: ingest,
   });

@@ -14,6 +14,9 @@ type JobInfo = {
   costPerHour: number | null;
   totalCost: number | null;
   errorMessage: string | null;
+  logTail: string | null;
+  sshCommand: string | null;
+  sshKeyConfigured: boolean;
 };
 
 export function SessionPipelineStatus({ sessionId }: { sessionId: string }) {
@@ -142,6 +145,16 @@ export function SessionPipelineStatus({ sessionId }: { sessionId: string }) {
           30–120 min pro Stunde Material.
         </p>
       )}
+
+      {job.sshCommand && (
+        <SshCommand
+          command={job.sshCommand}
+          keyConfigured={job.sshKeyConfigured}
+        />
+      )}
+
+      {job.logTail && <LogTail text={job.logTail} />}
+
       {job.status === "FAILED" && job.errorMessage && (
         <pre className="overflow-x-auto rounded bg-bg-subtle p-2 text-xs text-danger">
           {job.errorMessage}
@@ -156,6 +169,63 @@ export function SessionPipelineStatus({ sessionId }: { sessionId: string }) {
       <div className="text-xs text-fg-subtle">
         Status wird alle 10 s aktualisiert.
       </div>
+    </div>
+  );
+}
+
+function SshCommand({
+  command,
+  keyConfigured,
+}: {
+  command: string;
+  keyConfigured: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (!keyConfigured) {
+    return (
+      <div className="rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
+        Pod hat SSH offen auf{" "}
+        <code className="font-mono text-fg">{command.split(" ")[1]}</code>,
+        aber kein <code>DEBUG_SSH_PUBLIC_KEY</code> in Railway gesetzt — kein
+        Login möglich. Setze die env var einmalig (siehe README), dann nimmt
+        der nächste Pod sie automatisch.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        SSH zum Pod
+      </div>
+      <div className="flex gap-2">
+        <code className="flex-1 overflow-x-auto rounded bg-bg-subtle px-2 py-1.5 font-mono text-xs">
+          {command}
+        </code>
+        <button
+          type="button"
+          className="btn btn-ghost px-2 py-1 text-xs"
+          onClick={() => {
+            void navigator.clipboard.writeText(command);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+        >
+          {copied ? "Kopiert" : "Kopieren"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LogTail({ text }: { text: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        <span>Live-Log (letzte 8 KB)</span>
+      </div>
+      <pre className="max-h-72 overflow-auto rounded bg-bg-subtle p-2 font-mono text-[11px] leading-snug text-fg-muted">
+        {text || "(noch leer — Pod hat noch nicht in das Log geschrieben)"}
+      </pre>
     </div>
   );
 }
