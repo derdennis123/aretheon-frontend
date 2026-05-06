@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "/bin/sh -c 'echo START; node node_modules/prisma/build/index.js db push --accept-data-loss --schema=prisma/schema.prisma 2>&1; ec=$?; echo PRISMA_EXIT=$ec; if [ $ec -ne 0 ]; then exit $ec; fi; echo NEXT_START PORT=$PORT HOSTNAME=$HOSTNAME; exec node server.js'",
+    "healthcheckPath": "/login",
+    "healthcheckTimeout": 180,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
+  }
+}
