@@ -146,11 +146,8 @@ export function SessionPipelineStatus({ sessionId }: { sessionId: string }) {
         </p>
       )}
 
-      {job.sshCommand && (
-        <SshCommand
-          command={job.sshCommand}
-          keyConfigured={job.sshKeyConfigured}
-        />
+      {job.sshCommand && job.sshKeyConfigured && (
+        <SshCommand command={job.sshCommand} />
       )}
 
       {job.logTail && <LogTail text={job.logTail} />}
@@ -173,25 +170,8 @@ export function SessionPipelineStatus({ sessionId }: { sessionId: string }) {
   );
 }
 
-function SshCommand({
-  command,
-  keyConfigured,
-}: {
-  command: string;
-  keyConfigured: boolean;
-}) {
+function SshCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
-  if (!keyConfigured) {
-    return (
-      <div className="rounded border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
-        Pod hat SSH offen auf{" "}
-        <code className="font-mono text-fg">{command.split(" ")[1]}</code>,
-        aber kein <code>DEBUG_SSH_PUBLIC_KEY</code> in Railway gesetzt — kein
-        Login möglich. Setze die env var einmalig (siehe README), dann nimmt
-        der nächste Pod sie automatisch.
-      </div>
-    );
-  }
   return (
     <div className="space-y-1">
       <div className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
