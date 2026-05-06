@@ -129,8 +129,24 @@ export function pipelinePodSpec(opts: {
   jobId: string;
   inputPrefix: string;
   outputPrefix: string;
+  // Optional single-file inputs (per-session jobs). When set, the pipeline
+  // should process only this file and tag every emitted clip with this
+  // `source_session_id`. Per-project jobs leave both unset and the pipeline
+  // walks INPUT_PREFIX, reading the .session.json sidecar next to each mp4.
+  inputFile?: string;
+  sourceSessionId?: string;
   gpuTypeId?: string;
 }): CreatePodOptions {
+  const env: Record<string, string> = {
+    JOB_ID: opts.jobId,
+    INPUT_PREFIX: opts.inputPrefix,
+    OUTPUT_PREFIX: opts.outputPrefix,
+    HF_TOKEN: process.env.HF_TOKEN ?? "",
+    RUNPOD_VOLUME_ID: process.env.RUNPOD_VOLUME_ID ?? "",
+  };
+  if (opts.inputFile) env.INPUT_FILE = opts.inputFile;
+  if (opts.sourceSessionId) env.SOURCE_SESSION_ID = opts.sourceSessionId;
+
   return {
     name: `aretheon-${opts.jobId}`,
     imageName: "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
@@ -140,13 +156,7 @@ export function pipelinePodSpec(opts: {
     networkVolumeId: process.env.RUNPOD_VOLUME_ID,
     volumeMountPath: "/workspace",
     dataCenterIds: ["US-KS-2"],
-    env: {
-      JOB_ID: opts.jobId,
-      INPUT_PREFIX: opts.inputPrefix,
-      OUTPUT_PREFIX: opts.outputPrefix,
-      HF_TOKEN: process.env.HF_TOKEN ?? "",
-      RUNPOD_VOLUME_ID: process.env.RUNPOD_VOLUME_ID ?? "",
-    },
+    env,
     dockerStartCmd: [
       "bash",
       "-lc",

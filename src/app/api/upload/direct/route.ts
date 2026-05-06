@@ -8,6 +8,8 @@ import {
   getS3Client,
   RUNPOD_BUCKET,
   objectExists,
+  putObjectJson,
+  sessionSidecarKey,
 } from "@/lib/runpod-s3";
 
 // Single-shot streaming upload endpoint.
@@ -123,6 +125,26 @@ export async function PUT(req: Request) {
       err instanceof Error ? err.message : "Upload failed",
       502,
     );
+  }
+
+  // Write a sidecar JSON next to the video. The offline pipeline reads this
+  // to learn which `Session` row a clip belongs to (-> source_session_id
+  // in the per-clip metadata it emits). RunPod-S3's ListObjectsV2 is
+  // unreliable, so we make the mapping explicit.
+  try {
+    await putObjectJson(sessionSidecarKey(key), {
+      session_id: sessionRow.id,
+      project_slug: project.slug,
+      worker_code: worker.workerCode,
+      camera_position: worker.cameraPosition,
+      date,
+      session_number: sessionNumber,
+      raw_video_key: key,
+      uploaded_by_id: session.user.id,
+      uploaded_at: new Date().toISOString(),
+    });
+  } catch {
+    // Sidecar is a nice-to-have; never fail the upload because of it.
   }
 
   await prisma.session.update({

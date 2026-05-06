@@ -29,6 +29,8 @@ export async function POST(req: Request) {
   }
 
   let inputPrefix: string;
+  let inputFile: string | undefined;
+  let sourceSessionId: string | undefined;
   let projectIdResolved: string | null = null;
   let totalDuration = 0;
 
@@ -43,11 +45,15 @@ export async function POST(req: Request) {
     }
     projectIdResolved = sessionRow.worker.projectId;
     totalDuration = sessionRow.durationSeconds ?? 1800;
-    // Use the per-session prefix so the pod only sees one video.
+    // Per-session run: pin the pipeline to this exact file via INPUT_FILE
+    // and tag every output clip with this session id. INPUT_PREFIX still
+    // points at the day directory as a fallback.
     const slug = sessionRow.worker.project.slug;
     const code = sessionRow.worker.workerCode;
     const date = sessionRow.date.toISOString().slice(0, 10);
     inputPrefix = `data/raw/${slug}/${code}/${date}/`;
+    inputFile = sessionRow.rawVideoS3Key;
+    sourceSessionId = sessionRow.id;
   } else {
     const project = await prisma.project.findUnique({
       where: { id: projectId! },
@@ -84,6 +90,8 @@ export async function POST(req: Request) {
     jobId: job.id,
     inputPrefix,
     outputPrefix,
+    inputFile,
+    sourceSessionId,
     gpuTypeId,
   });
 

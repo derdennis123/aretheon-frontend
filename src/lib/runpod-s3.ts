@@ -7,6 +7,7 @@ import {
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
   UploadPartCommand,
+  PutObjectCommand,
   type CompletedPart,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -143,6 +144,28 @@ export async function abortMultipartUpload(key: string, uploadId: string) {
       UploadId: uploadId,
     }),
   );
+}
+
+export async function putObjectJson(
+  key: string,
+  body: unknown,
+): Promise<void> {
+  const client = getS3Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: RUNPOD_BUCKET,
+      Key: key,
+      Body: JSON.stringify(body, null, 2),
+      ContentType: "application/json",
+    }),
+  );
+}
+
+// Sidecar JSON written next to every raw video so the offline pipeline can
+// map a clip back to the right `Session` row without listing the bucket.
+// Path convention: data/raw/.../foo.mp4  ->  data/raw/.../foo.mp4.session.json
+export function sessionSidecarKey(rawVideoKey: string): string {
+  return `${rawVideoKey}.session.json`;
 }
 
 export function buildRawVideoKey(opts: {
